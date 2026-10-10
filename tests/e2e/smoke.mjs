@@ -23,10 +23,15 @@ const read = (p) => readFileSync(join(site, p), 'utf8');
 const errors = [];
 let step = 0;
 
-// APP_PATH points the test at a packaged build (for example release/win-unpacked/resources/app.asar)
-// instead of the working tree.
+// By default the test runs the working tree. Two variables point it elsewhere:
+//   APP_PATH  a packaged bundle, run with the development Electron
+//             (for example release/win-unpacked/resources/app.asar)
+//   APP_EXE   an installed or unpacked application executable, run as itself
+//             (for example C:\\...\\Wovenpage.exe) - this is the real thing a user launches
+const appExe = process.env.APP_EXE ? resolve(process.env.APP_EXE) : null;
 const app = await electron.launch({
-  args: [process.env.APP_PATH ? resolve(process.env.APP_PATH) : root, '--no-sandbox', '--disable-gpu'],
+  ...(appExe ? { executablePath: appExe } : {}),
+  args: [...(appExe ? [] : [process.env.APP_PATH ? resolve(process.env.APP_PATH) : root]), '--no-sandbox', '--disable-gpu'],
   env: { ...process.env, WOVENPAGE_OPEN: site, WOVENPAGE_USER_DATA: join(site, '..', 'user-data') },
 });
 const win = await app.firstWindow();
@@ -78,6 +83,13 @@ const check = async (name, fn) => {
 
 try {
   await win.waitForSelector('.wb', { timeout: 30000 });
+  const build = await app.evaluate(({ app: electronApp }) => ({ packaged: electronApp.isPackaged, version: electronApp.getVersion(), exe: process.execPath }));
+  console.log(`app ${build.version}, ${build.packaged ? 'packaged' : 'development'} build, running ${build.exe}`);
+  if (appExe) {
+    // When asked to test an installed app, make sure that is really what is running.
+    assert.equal(build.packaged, true, 'APP_EXE was given, so the app should report itself as a packaged build');
+    assert.equal(build.exe.toLowerCase(), appExe.toLowerCase(), 'the running executable is not the one that was asked for');
+  }
   // The checks below assume a desktop-sized window (the starter site switches to its phone layout when narrow).
   const viewport = await win.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
   console.log(`window ${viewport.width} x ${viewport.height}`);
