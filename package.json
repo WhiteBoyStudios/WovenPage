@@ -1,0 +1,74 @@
+{
+  "name": "wovenpage",
+  "version": "0.1.0",
+  "description": "A web authoring tool in which the design view and the code view edit the same source text.",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:release": "node scripts/build.mjs --minify",
+    "watch": "node scripts/build.mjs --watch",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "dist": "npm run build:release && electron-builder --win nsis",
+    "e2e": "node tests/e2e/smoke.mjs",
+    "dist:portable": "npm run build:release && electron-builder --win zip -c.win.signAndEditExecutable=false"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@fontsource-variable/instrument-sans": "^5.3.0",
+    "@fontsource/commit-mono": "^5.3.0",
+    "@types/node": "^26.6.5",
+    "@types/ssh2": "^1.15.6",
+    "@types/ssh2-sftp-client": "^9.0.6",
+    "acorn": "^8.19.0",
+    "basic-ftp": "^6.2.3",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "monaco-editor": "^0.57.0",
+    "playwright-core": "^1.64.0",
+    "ssh2": "^1.17.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "sass": "^1.105.1",
+    "ssh2-sftp-client": "^12.1.1"
+  },
+  "productName": "Wovenpage",
+  "private": true,
+  "build": {
+    "appId": "app.wovenpage.studio",
+    "productName": "Wovenpage",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "!dist/**/*.map",
+      "!**/*.node"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Wovenpage-Setup-${version}.${ext}"
+    }
+  }
+}

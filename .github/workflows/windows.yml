@@ -1,0 +1,51 @@
+# Builds, tests and packages Wovenpage on Windows.
+# The installer and the end-to-end screenshots are attached to the run as artifacts.
+name: Windows
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Unit, service and transport tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: End-to-end test (drives the real app)
+        run: npm run e2e
+        env:
+          SHOTS: e2e-screenshots
+
+      - name: Build the installer
+        run: npm run dist
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: e2e-screenshots
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wovenpage-Setup
+          path: release/*.exe
