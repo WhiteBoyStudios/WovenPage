@@ -50,5 +50,6 @@ def draw(size: int) -> Image.Image:
 out = Path(__file__).resolve().parent.parent / "build"
 out.mkdir(exist_ok=True)
 draw(512).save(out / "icon.png")
-draw(256).save(out / "icon.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+# Small sizes are stored as classic bitmaps (the most widely accepted form); Pillow keeps 256 px as PNG.
+draw(256).save(out / "icon.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)], bitmap_format="bmp")
 print("wrote", out / "icon.ico", "and", out / "icon.png")

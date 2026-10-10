@@ -24,6 +24,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Hosted Windows runners start at 1024 x 768, which is smaller than the app's working size.
+      - name: Use a desktop-sized display
+        shell: pwsh
+        run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
+
       - run: npm ci
 
       - name: Type-check
@@ -49,7 +54,9 @@ jobs:
 
       - name: Build the installer
         if: ${{ !cancelled() }}
-        run: npm run dist
+        run: |
+          set -o pipefail
+          npm run dist 2>&1 | tee dist.log || { node scripts/annotate-tail.mjs "Installer build" dist.log; exit 1; }
 
       - uses: actions/upload-artifact@v4
         if: always()
