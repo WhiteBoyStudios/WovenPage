@@ -23,6 +23,7 @@ on:
   push:
     tags:
       - 'v*'
+    branches: [ci-workflows]  # TEMPORARY: exercises this workflow as a draft before it is merged
 
 permissions:
   contents: write
@@ -50,13 +51,15 @@ jobs:
       INSTALLER: ${{ needs.verify.outputs.installer }}
       SHA256: ${{ needs.verify.outputs.sha256 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Decide how to publish
         id: plan
         run: |
           # A manual run may ask for a draft. A tag push always publishes.
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.draft }}" = "true" ]; then
+          if [ "${{ github.ref_type }}" = "branch" ] && [ "${{ github.event_name }}" = "push" ]; then
+            echo "draft=true" >> "$GITHUB_OUTPUT"  # TEMPORARY, with the branch trigger above
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.draft }}" = "true" ]; then
             echo "draft=true" >> "$GITHUB_OUTPUT"
           else
             echo "draft=false" >> "$GITHUB_OUTPUT"
@@ -78,7 +81,7 @@ jobs:
           if [ "$state" = "draft" ]; then gh release delete "$TAG" --yes; fi
 
       - name: Fetch the verified installer
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: Wovenpage-Setup
           path: release

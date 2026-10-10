@@ -42,9 +42,9 @@ jobs:
       installer: ${{ steps.package.outputs.installer }}
       sha256: ${{ steps.package.outputs.sha256 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -163,7 +163,7 @@ jobs:
             echo "Installer SHA-256: \`${{ steps.package.outputs.sha256 }}\`" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-screenshots
@@ -171,7 +171,7 @@ jobs:
           if-no-files-found: ignore
 
       # Only an installer that passed every check is offered for download.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: success()
         with:
           name: Wovenpage-Setup
