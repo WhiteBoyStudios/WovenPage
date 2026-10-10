@@ -65,7 +65,6 @@ docs/          Architecture and originality notes
 
 Version 0.1. The core is implemented and tested; see "Known limits" in the architecture document for what is not done yet.
 
-The app was developed and tested on Linux with Electron and has not yet been run on Windows. Two things are in place to close that gap:
+The app is developed on Linux and verified on Windows by `.github/workflows/windows.yml`, which runs on every push: type check, all 45 tests, the 23-step end-to-end test against the real app, and the installer build. The installer (`Wovenpage-Setup`) and the end-to-end screenshots are attached to each run under Artifacts.
 
-- `.github/workflows/windows.yml` runs the type check, all tests, the end-to-end test and the installer build on a Windows machine whenever the repository is pushed to GitHub, and attaches the installer and screenshots to the run.
-- `npm run dist:portable` produces a Windows build without needing Windows. It is unsigned, so Windows SmartScreen will warn before running it.
+The installer is not code-signed, so Windows SmartScreen warns before running it. `npm run dist:portable` produces a portable Windows zip from any OS.

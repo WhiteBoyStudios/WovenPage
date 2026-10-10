@@ -215,7 +215,7 @@ Three tags give a static site shared structure without a runtime. The format is 
 
 Stated plainly, so nobody discovers them the hard way:
 
-- **Not yet run on Windows.** Development and all tests ran on Linux under Electron. The code avoids platform assumptions (paths are normalised, the watcher uses the recursive mode Windows supports), but the Windows build, installer, and DPAPI password storage are unverified. `.github/workflows/windows.yml` runs every test and builds the installer on Windows once the repository is on GitHub; `npm run dist:portable` builds a Windows zip from any OS.
+- **Windows coverage is automated, not hands-on.** `.github/workflows/windows.yml` runs the type check, every test, the end-to-end test and the installer build on Windows Server for each push, and all of it passes. Nobody has yet installed the result on a desktop Windows machine and used it by hand, and DPAPI password storage is not exercised by the tests (publishing to a folder needs no password).
 - **FTPS and SFTP key authentication are untested.** Plain FTP and SFTP with a password are tested over the wire.
 - **The parser is not a full HTML5 tree builder.** It handles implied end tags for the common cases; in badly malformed markup, its idea of where an element ends can differ from the browser's. Addresses stay correct (they are tied to open tags); a move or delete in such markup may take more or less than expected, and is undoable.
 - **URL rebasing covers attributes only.** `url()` inside an inline `style` or a `<style>` block in a layout or part is not rebased. Put such rules in a stylesheet.
