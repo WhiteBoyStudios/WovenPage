@@ -65,6 +65,33 @@ docs/          Architecture and originality notes
 
 Version 0.1. The core is implemented and tested; see "Known limits" in the architecture document for what is not done yet.
 
-The app is developed on Linux and verified on Windows by `.github/workflows/windows.yml`, which runs on every push: type check, all 45 tests, the 23-step end-to-end test against the real app, and the installer build. The installer (`Wovenpage-Setup`) and the end-to-end screenshots are attached to each run under Artifacts.
-
 The installer is not code-signed, so Windows SmartScreen warns before running it. `npm run dist:portable` produces a portable Windows zip from any OS.
+
+## Getting the installer
+
+Published versions are on the repository's **Releases** page: open it, and under **Assets** download `Wovenpage-Setup-<version>.exe`.
+
+To publish a version: **Actions** tab, **Publish release** in the list on the left, **Run workflow**. It takes about fifteen minutes and refuses to publish anything that did not pass verification. A version can be published once; raise `"version"` in `package.json` to publish the next one.
+
+## How it is verified on Windows
+
+The app is developed on Linux and verified on Windows by GitHub Actions. Three workflows live in `.github/workflows`:
+
+| Workflow | Runs | What it does |
+| --- | --- | --- |
+| **Windows** (`windows.yml`) | every push and pull request | Type check, all 45 tests, the 23-step end-to-end test, the installer build |
+| **Verify Windows build** (`verify-windows.yml`) | pull requests, pushes to `main`, on demand | Eight named checks, listed below, with a results table on the run's summary page |
+| **Publish release** (`release.yml`) | on demand, or when a `v<version>` tag is pushed | Runs the verification, then publishes the installer that passed it as a GitHub Release |
+
+The eight checks:
+
+1. The display is desktop-sized (1920 x 1080 or more).
+2. The type check and all tests pass.
+3. FTP and SFTP publishing survive the way Windows reports dropped connections.
+4. The build is complete: every file the app needs is present.
+5. Packaging completes and the installer is sound: plausible size, the right contents, no source or tests inside.
+6. The installer works as designed: it installs silently, registers with Windows, and adds a Start menu shortcut and an uninstaller.
+7. The installed app works: the end-to-end test drives the installed copy, not the working tree.
+8. The uninstaller removes the app, its registration and its shortcut.
+
+The installer is attached to a verification run (under Artifacts) only when all eight passed.

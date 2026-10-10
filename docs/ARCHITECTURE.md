@@ -211,11 +211,15 @@ Three tags give a static site shared structure without a runtime. The format is 
 | `tests/transports.test.ts` | Real FTP and SFTP round trips against in-process servers; wrong password; refused connection |
 | `tests/e2e/smoke.mjs` | Launches the app and checks 23 workflows end to end against the files on disk: selection, inline and rule styles, text editing, insert by drag, reorder by drag, multiple selection with styling, grouping and undo, delete and undo, editing a part from a page, source-to-canvas, search, problems, build, part instance parameters, resize handles and snapping, device widths, Interact navigation, new page, assets, publish to a folder, Sass written by another program, theme |
 
+`tests/e2e/smoke.mjs` runs against the working tree by default, against a packaged archive with `APP_PATH`, or against an installed executable with `APP_EXE`; in the last case it also asserts that the running app reports itself as packaged and is the executable that was asked for.
+
+**On Windows.** Three GitHub Actions workflows run on `windows-latest`. "Windows" repeats the suites above and builds the installer on every push. "Verify Windows build" is the release gate: eight named checks, each a step with its own script in `scripts/ci`, covering the display size, the tests, the transport tests on their own, the completeness of the build, the contents of the installer, a real silent install, the end-to-end test against the installed copy, and uninstall. "Publish release" calls that workflow and publishes the installer it produced, after confirming by SHA-256 that the file it is about to publish is the one that was verified.
+
 ## 10. Known limits
 
 Stated plainly, so nobody discovers them the hard way:
 
-- **Windows coverage is automated, not hands-on.** `.github/workflows/windows.yml` runs the type check, every test, the end-to-end test and the installer build on Windows Server for each push, and all of it passes. Nobody has yet installed the result on a desktop Windows machine and used it by hand, and DPAPI password storage is not exercised by the tests (publishing to a folder needs no password).
+- **Windows coverage is automated, not hands-on.** On Windows Server, the workflows run the type check, every test and the end-to-end test, build the installer, install it, run the end-to-end test against the installed app and uninstall it, and all of it passes. Nobody has yet installed the result on a desktop Windows machine and used it by hand, and DPAPI password storage is not exercised by the tests (publishing to a folder needs no password).
 - **FTPS and SFTP key authentication are untested.** Plain FTP and SFTP with a password are tested over the wire.
 - **The parser is not a full HTML5 tree builder.** It handles implied end tags for the common cases; in badly malformed markup, its idea of where an element ends can differ from the browser's. Addresses stay correct (they are tied to open tags); a move or delete in such markup may take more or less than expected, and is undoable.
 - **URL rebasing covers attributes only.** `url()` inside an inline `style` or a `<style>` block in a layout or part is not rebased. Put such rules in a stylesheet.

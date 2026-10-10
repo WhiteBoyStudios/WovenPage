@@ -1,0 +1,179 @@
+# Verifies the Windows build end to end, one named check at a time, and ends
+# with a table of results on the run's summary page.
+#
+# It goes further than the "Windows" workflow: it runs the real installer,
+# drives the *installed* application through the end-to-end test, and then
+# uninstalls it. The installer it uploads is therefore one that has been
+# installed, launched and exercised.
+#
+# The "Publish release" workflow calls this one and publishes that installer.
+name: Verify Windows build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      version:
+        description: Version from package.json
+        value: ${{ jobs.verify.outputs.version }}
+      installer:
+        description: File name of the verified installer
+        value: ${{ jobs.verify.outputs.installer }}
+      sha256:
+        description: SHA-256 of the verified installer
+        value: ${{ jobs.verify.outputs.sha256 }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify on Windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      installer: ${{ steps.package.outputs.installer }}
+      sha256: ${{ steps.package.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - id: meta
+        name: Read the version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Hosted Windows runners start at 1024 x 768, smaller than the app's working size.
+      - name: Set a desktop-sized display
+        shell: pwsh
+        run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
+
+      - id: display
+        name: "Check 1: the display is desktop-sized"
+        shell: pwsh
+        run: ./scripts/ci/check-display.ps1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - id: tests
+        name: "Check 2: type check and all tests pass"
+        if: ${{ !cancelled() }}
+        run: |
+          npm run typecheck
+          node --import tsx --test \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=tap --test-reporter-destination=test.tap \
+            tests/*.test.ts || { node scripts/annotate-failures.mjs test.tap; exit 1; }
+          echo "detail=$(grep -E '^# pass' test.tap | tr -d '#' | xargs) tests" >> "$GITHUB_OUTPUT"
+
+      # The publishing tests talk real FTP and SFTP to in-process servers. On
+      # Windows a client that drops the connection shows up as ECONNRESET, which
+      # the servers must tolerate; this runs those tests on their own so a
+      # regression there is named for what it is.
+      - id: transports
+        name: "Check 3: FTP and SFTP publishing survive Windows connection resets"
+        if: ${{ !cancelled() }}
+        run: |
+          node --import tsx --test \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=tap --test-reporter-destination=transports.tap \
+            tests/transports.test.ts || { node scripts/annotate-failures.mjs transports.tap; exit 1; }
+          echo "detail=FTP and SFTP round trips, wrong password, refused connection" >> "$GITHUB_OUTPUT"
+
+      - id: build
+        name: "Check 4: the build is complete"
+        if: ${{ !cancelled() }}
+        run: |
+          npm run build
+          node scripts/ci/check-build.mjs
+
+      - id: package
+        name: "Check 5: packaging completes and produces a sound installer"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          npm run dist 2>&1 | tee dist.log || { node scripts/annotate-tail.mjs "Packaging" dist.log; exit 1; }
+          node scripts/ci/check-package.mjs
+
+      - id: install
+        name: "Check 6: the installer works as designed"
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        shell: pwsh
+        run: ./scripts/ci/check-installer.ps1 -InstallDir (Join-Path $env:RUNNER_TEMP 'WovenpageInstalled')
+
+      - id: installed
+        name: "Check 7: the installed app works (end-to-end test against the installed copy)"
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          npm run e2e 2>&1 | tee e2e.log
+          echo "detail=$(grep -c '^ok' e2e.log) checks passed on $(grep -m1 '^app ' e2e.log | cut -d, -f1-2)" >> "$GITHUB_OUTPUT"
+        env:
+          APP_EXE: ${{ steps.install.outputs.exe }}
+          SHOTS: e2e-screenshots
+
+      - id: uninstall
+        name: "Check 8: the uninstaller removes the app"
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        shell: pwsh
+        run: ./scripts/ci/check-uninstall.ps1 -InstallDir '${{ steps.install.outputs.install_dir }}'
+
+      - name: Report
+        if: always()
+        run: |
+          row() { # name, outcome, detail
+            case "$2" in
+              success) mark="✅ passed" ;;
+              failure) mark="❌ FAILED" ;;
+              *) mark="⏭️ not run" ;;
+            esac
+            echo "| $1 | $mark | ${3:-} |" >> "$GITHUB_STEP_SUMMARY"
+            lines="$lines%0A$mark - $1${3:+ ($3)}"
+          }
+          lines=""
+          {
+            echo "## Windows verification, version ${{ steps.meta.outputs.version }}"
+            echo
+            echo "| Check | Result | Detail |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          row "Desktop-sized display" "${{ steps.display.outcome }}" "${{ steps.display.outputs.detail }}"
+          row "Type check and all tests" "${{ steps.tests.outcome }}" "${{ steps.tests.outputs.detail }}"
+          row "FTP and SFTP publishing tolerate connection resets" "${{ steps.transports.outcome }}" "${{ steps.transports.outputs.detail }}"
+          row "Build complete" "${{ steps.build.outcome }}" "${{ steps.build.outputs.detail }}"
+          row "Packaging completed, installer sound" "${{ steps.package.outcome }}" "${{ steps.package.outputs.detail }}"
+          row "Installer works as designed" "${{ steps.install.outcome }}" "${{ steps.install.outputs.detail }}"
+          row "Installed app works" "${{ steps.installed.outcome }}" "${{ steps.installed.outputs.detail }}"
+          row "Uninstaller removes the app" "${{ steps.uninstall.outcome }}" "${{ steps.uninstall.outputs.detail }}"
+          # The same results as a notice, so they also show on the run page and through the API.
+          echo "::notice title=Windows verification%2C version ${{ steps.meta.outputs.version }}::${lines#%0A}"
+          if [ -n "${{ steps.package.outputs.sha256 }}" ]; then
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "Installer SHA-256: \`${{ steps.package.outputs.sha256 }}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: e2e-screenshots
+          if-no-files-found: ignore
+
+      # Only an installer that passed every check is offered for download.
+      - uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          name: Wovenpage-Setup
+          path: release/Wovenpage-Setup-*.exe
+          if-no-files-found: error

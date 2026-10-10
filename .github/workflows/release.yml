@@ -1,0 +1,131 @@
+# Publishes Wovenpage to GitHub as a Release, with the Windows installer attached.
+#
+# It first runs the whole "Verify Windows build" workflow, and publishes the
+# exact installer that passed it - the one that was installed, launched and
+# exercised - never an untested one.
+#
+# Two ways to run it:
+#   - Actions tab > Publish release > Run workflow. Leave "draft" unticked to
+#     publish straight away, or tick it to get a private draft to look at first.
+#   - Push a tag named v<version>, for example v0.1.0.
+#
+# The version comes from package.json. A version can be published once; to
+# publish again, raise the version in package.json first.
+name: Publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: Create a private draft instead of publishing (you can publish it later from the Releases page)
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    uses: ./.github/workflows/verify-windows.yml
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish to GitHub
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      TAG: v${{ needs.verify.outputs.version }}
+      INSTALLER: ${{ needs.verify.outputs.installer }}
+      SHA256: ${{ needs.verify.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide how to publish
+        id: plan
+        run: |
+          # A manual run may ask for a draft. A tag push always publishes.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.draft }}" = "true" ]; then
+            echo "draft=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "${{ github.ref_type }}" = "tag" ] && [ "${{ github.ref_name }}" != "$TAG" ]; then
+            echo "::error title=Tag and version disagree::The tag is ${{ github.ref_name }} but package.json says $VERSION, so the release would be $TAG. Make them match."
+            exit 1
+          fi
+
+      - name: Refuse to overwrite a published release
+        run: |
+          state=$(gh release view "$TAG" --json isDraft --jq 'if .isDraft then "draft" else "published" end' 2>/dev/null || echo none)
+          echo "Existing release for $TAG: $state"
+          if [ "$state" = "published" ]; then
+            echo "::error title=$TAG is already published::Version $VERSION has already been released. Raise \"version\" in package.json, then run this again."
+            exit 1
+          fi
+          # An earlier draft for the same version is replaced by this run.
+          if [ "$state" = "draft" ]; then gh release delete "$TAG" --yes; fi
+
+      - name: Fetch the verified installer
+        uses: actions/download-artifact@v8
+        with:
+          name: Wovenpage-Setup
+          path: release
+
+      - name: Confirm it is the installer that was verified
+        run: |
+          actual=$(sha256sum "release/$INSTALLER" | cut -d' ' -f1)
+          echo "expected $SHA256"
+          echo "actual   $actual"
+          if [ "$actual" != "$SHA256" ]; then
+            echo "::error title=Installer changed after verification::The downloaded installer does not match the one that passed verification."
+            exit 1
+          fi
+
+      - name: Write the release notes
+        run: |
+          cat > notes.md <<EOF
+          ## Install
+
+          1. Download **$INSTALLER** below.
+          2. Run it. Windows will show a blue "Windows protected your PC" box because the installer is not code-signed yet: choose **More info**, then **Run anyway**.
+          3. Start Wovenpage from the Start menu. On the first screen, choose "A small example site" to get something to explore.
+
+          ## Verified
+
+          This exact installer was installed on Windows, launched, driven through the full end-to-end test, and uninstalled before being published.
+
+          SHA-256: \`$SHA256\`
+          EOF
+
+      - name: Publish the release
+        run: |
+          flags=()
+          if [ "${{ steps.plan.outputs.draft }}" = "true" ]; then flags+=(--draft); fi
+          gh release create "$TAG" "release/$INSTALLER" \
+            --target "${{ github.sha }}" \
+            --title "Wovenpage $VERSION" \
+            --notes-file notes.md \
+            --generate-notes \
+            "${flags[@]}"
+          url=$(gh release view "$TAG" --json url --jq .url)
+          {
+            echo "## Wovenpage $VERSION"
+            echo
+            if [ "${{ steps.plan.outputs.draft }}" = "true" ]; then
+              echo "Created as a **draft**. Open it, check it, and press **Publish release** when you are happy: $url"
+            else
+              echo "Published: $url"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
