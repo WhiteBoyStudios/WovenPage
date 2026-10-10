@@ -12,6 +12,7 @@ A Windows desktop web-authoring tool (Electron + TypeScript + Monaco) with a des
 - **Templating:** the project's own format stays - `<w-page>`, `<w-fill>`, `<w-slot>`, `<w-part>`, `{{name | fallback}}`, compiled to plain HTML on build.
 - **Name:** "Wovenpage" stays. No trademark or domain search has been done; that is still open.
 - **Direction:** both hardening for Windows and deepening the editor were approved.
+- **Released:** 0.1.0 is published on the repository's Releases page. The next release needs `"version"` in `package.json` raised first; the workflow refuses to republish a version.
 
 ## Commands
 
@@ -74,12 +75,12 @@ The invariant that everything rests on: **element ids are only valid for the exa
 
 Verified on Linux under Electron 44: type check, all 45 tests (including real FTP and SFTP round trips against in-process servers), all 23 end-to-end checks on the working tree and on the packaged `app.asar`, and a clean install from the source archive.
 
-Verified on Windows (GitHub Actions, `windows-latest`): the same type check, 45 tests and 23 end-to-end checks, and the NSIS installer builds, installs silently, registers with Windows, creates its Start menu shortcut, runs (all 23 end-to-end checks against the installed exe) and uninstalls cleanly. "Publish release" has been run once from a branch as a draft and produced a correct draft release. The repository is `WhiteBoyStudios/WovenPage`.
+Verified on Windows (GitHub Actions, `windows-latest`): the same type check, 45 tests and 23 end-to-end checks, and the NSIS installer builds, installs silently, registers with Windows, creates its Start menu shortcut, runs (all 23 end-to-end checks against the installed exe) and uninstalls cleanly. "Publish release" has been run from `main` and published version 0.1.0 (10 October 2026) with the verified installer attached; dispatching it works from here with `gh api -X POST repos/WhiteBoyStudios/WovenPage/actions/workflows/release.yml/dispatches -f ref=main -F 'inputs[draft]=false'`. The repository is `WhiteBoyStudios/WovenPage`.
 
 Not verified:
 
 - Hands-on use of the installed app on a desktop Windows machine (the installed app is exercised by the automated test on Windows Server only).
-- A non-draft run of "Publish release", and the tag trigger.
+- The `v<version>` tag trigger of "Publish release" (the manual trigger is verified).
 - FTPS, and SFTP with a key file.
 - "Preview in browser" (opens the system browser).
 - DPAPI password storage, code signing, auto-update.
