@@ -139,7 +139,9 @@ jobs:
               *) mark="⏭️ not run" ;;
             esac
             echo "| $1 | $mark | ${3:-} |" >> "$GITHUB_STEP_SUMMARY"
+            lines="$lines%0A$mark - $1${3:+ ($3)}"
           }
+          lines=""
           {
             echo "## Windows verification, version ${{ steps.meta.outputs.version }}"
             echo
@@ -154,6 +156,8 @@ jobs:
           row "Installer works as designed" "${{ steps.install.outcome }}" "${{ steps.install.outputs.detail }}"
           row "Installed app works" "${{ steps.installed.outcome }}" "${{ steps.installed.outputs.detail }}"
           row "Uninstaller removes the app" "${{ steps.uninstall.outcome }}" "${{ steps.uninstall.outputs.detail }}"
+          # The same results as a notice, so they also show on the run page and through the API.
+          echo "::notice title=Windows verification%2C version ${{ steps.meta.outputs.version }}::${lines#%0A}"
           if [ -n "${{ steps.package.outputs.sha256 }}" ]; then
             echo >> "$GITHUB_STEP_SUMMARY"
             echo "Installer SHA-256: \`${{ steps.package.outputs.sha256 }}\`" >> "$GITHUB_STEP_SUMMARY"

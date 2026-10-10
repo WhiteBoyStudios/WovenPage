@@ -25,11 +25,18 @@ npm run dist              # Windows installer (must run on Windows: NSIS needs i
 npm run dist:portable     # Windows zip, builds on any OS
 ```
 
+Workflows (`.github/workflows`):
+
+- `windows.yml` "Windows" - every push and pull request: type check, tests, end-to-end test, installer build.
+- `verify-windows.yml` "Verify Windows build" - pull requests, pushes to `main`, on demand, and callable. Eight named checks (scripts in `scripts/ci`), including a real silent install, the end-to-end test against the installed exe, and uninstall. Results go to the run summary and to a `notice` annotation.
+- `release.yml` "Publish release" - manual (optional `draft`), or a `v<version>` tag. Calls the verification, then publishes that exact installer as a GitHub Release. Refuses to overwrite a published version; replaces an existing draft.
+
 On Linux the end-to-end test needs a display:
 
 ```
 SHOTS=/some/dir xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e/smoke.mjs
 APP_PATH=release/win-unpacked/resources/app.asar ...   # run it against a packaged build
+APP_EXE=/path/to/installed/Wovenpage.exe ...           # run it against an installed or unpacked executable
 ```
 
 ## How the code is laid out
@@ -56,17 +63,21 @@ The invariant that everything rests on: **element ids are only valid for the exa
 - Hosted Windows runners start at 1024 x 768. The starter site then renders its phone layout and the end-to-end test fails in confusing ways, so the workflow sets 1920 x 1080 first and the test checks the window size up front.
 - Job logs and artifacts cannot be downloaded from this environment (blob storage is blocked). Read CI failures through annotations: `gh api repos/OWNER/REPO/check-runs/JOB_ID/annotations`. Tests, the end-to-end script and the installer step all emit `::error` annotations for that reason.
 - electron-builder publishes a release when it detects CI unless told `--publish never`.
+- Releases cannot be created, edited or deleted from this environment (the API refuses). Publishing happens only through the "Publish release" workflow; a leftover draft has to be removed by the owner on the Releases page, or is replaced by the next run.
+- A workflow with only `workflow_dispatch` and tag triggers cannot be run until it is on `main`. To try a change to `release.yml` from a branch, add a temporary `push: branches:` trigger that forces a draft, and remove it before merging.
+- Silent NSIS install is `Setup.exe /S /D=<dir>` (`/D` last, unquoted); silent uninstall that waits is `"Uninstall Wovenpage.exe" /S _?=<dir>`.
 - Test servers need socket `error` handlers: Windows reports an abrupt client close as ECONNRESET where Linux gives a clean end.
 
 ## Verified, and not
 
 Verified on Linux under Electron 44: type check, all 45 tests (including real FTP and SFTP round trips against in-process servers), all 23 end-to-end checks on the working tree and on the packaged `app.asar`, and a clean install from the source archive.
 
-Verified on Windows (GitHub Actions, `windows-latest`): the same type check, 45 tests and 23 end-to-end checks, and the NSIS installer builds. The repository is `WhiteBoyStudios/WovenPage`.
+Verified on Windows (GitHub Actions, `windows-latest`): the same type check, 45 tests and 23 end-to-end checks, and the NSIS installer builds, installs silently, registers with Windows, creates its Start menu shortcut, runs (all 23 end-to-end checks against the installed exe) and uninstalls cleanly. "Publish release" has been run once from a branch as a draft and produced a correct draft release. The repository is `WhiteBoyStudios/WovenPage`.
 
 Not verified:
 
-- Hands-on use of the installed app on a desktop Windows machine.
+- Hands-on use of the installed app on a desktop Windows machine (the installed app is exercised by the automated test on Windows Server only).
+- A non-draft run of "Publish release", and the tag trigger.
 - FTPS, and SFTP with a key file.
 - "Preview in browser" (opens the system browser).
 - DPAPI password storage, code signing, auto-update.
