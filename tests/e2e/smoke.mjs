@@ -69,6 +69,8 @@ const check = async (name, fn) => {
     console.log(`ok    ${name}`);
   } catch (err) {
     console.log(`FAIL  ${name}\n      ${String(err.message).split('\n').join('\n      ')}`);
+    // On GitHub Actions, surface the failure on the run's summary page as well.
+    if (process.env.GITHUB_ACTIONS) console.log(`::error title=${`e2e: ${name}`.replace(/%/g, '%25').replace(/,/g, '%2C').replace(/:/g, '%3A').slice(0, 200)}::${String(err.message).slice(0, 2500).replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A')}`);
     errors.push(`${name}: ${err.message}`);
     await shot(`FAIL-${name.replace(/\W+/g, '-')}`);
   }
@@ -76,6 +78,14 @@ const check = async (name, fn) => {
 
 try {
   await win.waitForSelector('.wb', { timeout: 30000 });
+  // The checks below assume a desktop-sized window (the starter site switches to its phone layout when narrow).
+  const viewport = await win.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  console.log(`window ${viewport.width} x ${viewport.height}`);
+  if (viewport.width < 1300 || viewport.height < 800) {
+    const message = `The app window is ${viewport.width} x ${viewport.height}; this test needs at least 1300 x 800. Raise the display resolution.`;
+    if (process.env.GITHUB_ACTIONS) console.log(`::error title=e2e%3A window too small::${message}`);
+    throw new Error(message);
+  }
   await canvas.locator('h1').waitFor({ timeout: 20000 });
   await settle();
   await shot('opened');
@@ -338,9 +348,12 @@ try {
     };
     // Released 4 px short of the edge: the width lands exactly on it.
     assert.equal(await drag(edge - 4, false), Math.round(edge));
-    // The same gesture with Alt held keeps the pointer's own position.
+    // The same gesture with Alt held keeps the pointer's own position (to within a pixel of
+    // rounding, which differs with display scaling) instead of jumping to the edge.
     await drag(edge - 40, true);
-    assert.equal(await drag(edge - 4, true), Math.round(edge - 4));
+    const free = await drag(edge - 4, true);
+    assert.ok(Math.abs(free - (edge - 4)) <= 1.5, `expected about ${edge - 4}, got ${free}`);
+    assert.notEqual(free, Math.round(edge));
   });
 
   await check('device widths scale the canvas; interact mode follows links to other pages', async () => {
@@ -351,11 +364,15 @@ try {
     await shot('phone');
     await win.locator('.bar__devices button[aria-label="Fill the space"]').click();
     await win.keyboard.press('Control+I');
-    await canvas.locator('.site-nav a', { hasText: 'Visit' }).click();
-    await win.waitForFunction(() => document.querySelector('.tab.is-active')?.textContent?.includes('visit.html'), null, { timeout: 8000 });
-    await canvas.locator('form.form').waitFor({ timeout: 8000 });
-    await win.keyboard.press('Control+I');
-    await win.keyboard.press('Control+2');
+    try {
+      await canvas.locator('.site-nav a', { hasText: 'Visit' }).click({ timeout: 10000 });
+      await win.waitForFunction(() => document.querySelector('.tab.is-active')?.textContent?.includes('visit.html'), null, { timeout: 8000 });
+      await canvas.locator('form.form').waitFor({ timeout: 8000 });
+    } finally {
+      // Leave Interact mode whatever happened, so a failure here cannot cascade into later checks.
+      if ((await win.locator('.bar__interact').getAttribute('aria-pressed')) === 'true') await win.keyboard.press('Control+I');
+      await win.keyboard.press('Control+2');
+    }
   });
 
   await check('a new page is created from the layout and opens ready to edit', async () => {

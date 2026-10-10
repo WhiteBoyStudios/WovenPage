@@ -10,9 +10,9 @@
     "start": "npm run build && electron .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --import tsx --test tests/*.test.ts",
-    "dist": "npm run build:release && electron-builder --win nsis",
+    "dist": "npm run build:release && electron-builder --win nsis --publish never",
     "e2e": "node tests/e2e/smoke.mjs",
-    "dist:portable": "npm run build:release && electron-builder --win zip -c.win.signAndEditExecutable=false"
+    "dist:portable": "npm run build:release && electron-builder --win zip --publish never -c.win.signAndEditExecutable=false"
   },
   "author": "",
   "license": "UNLICENSED",

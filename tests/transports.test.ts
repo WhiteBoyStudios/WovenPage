@@ -50,6 +50,8 @@ function startFtp(root: string, user: string, password: string): Promise<{ port:
   const server = net.createServer((socket) => {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
+    // A client that drops the connection without QUIT surfaces as ECONNRESET on Windows.
+    socket.on('error', () => undefined);
     let cwd = '/';
     let authed = false;
     let name = '';
@@ -113,7 +115,13 @@ function startFtp(root: string, user: string, password: string): Promise<{ port:
           case 'PASV': {
             passive?.close();
             passive = net.createServer();
-            dataSocket = new Promise((resolve) => passive!.once('connection', resolve));
+            passive.on('error', () => undefined);
+            dataSocket = new Promise((resolve) =>
+              passive!.once('connection', (data) => {
+                data.on('error', () => undefined);
+                resolve(data);
+              }),
+            );
             await new Promise<void>((resolve) => passive!.listen(0, '127.0.0.1', resolve));
             const port = (passive.address() as net.AddressInfo).port;
             return say(cmd === 'EPSV' ? `229 Entering Extended Passive Mode (|||${port}|)` : `227 Entering Passive Mode (127,0,0,1,${port >> 8},${port & 255})`);
