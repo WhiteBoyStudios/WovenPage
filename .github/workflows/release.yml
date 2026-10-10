@@ -23,7 +23,6 @@ on:
   push:
     tags:
       - 'v*'
-    branches: [ci-workflows]  # TEMPORARY: exercises this workflow as a draft before it is merged
 
 permissions:
   contents: write
@@ -57,9 +56,7 @@ jobs:
         id: plan
         run: |
           # A manual run may ask for a draft. A tag push always publishes.
-          if [ "${{ github.ref_type }}" = "branch" ] && [ "${{ github.event_name }}" = "push" ]; then
-            echo "draft=true" >> "$GITHUB_OUTPUT"  # TEMPORARY, with the branch trigger above
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.draft }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.draft }}" = "true" ]; then
             echo "draft=true" >> "$GITHUB_OUTPUT"
           else
             echo "draft=false" >> "$GITHUB_OUTPUT"
