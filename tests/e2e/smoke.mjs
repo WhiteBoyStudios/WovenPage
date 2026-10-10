@@ -348,9 +348,12 @@ try {
     };
     // Released 4 px short of the edge: the width lands exactly on it.
     assert.equal(await drag(edge - 4, false), Math.round(edge));
-    // The same gesture with Alt held keeps the pointer's own position.
+    // The same gesture with Alt held keeps the pointer's own position (to within a pixel of
+    // rounding, which differs with display scaling) instead of jumping to the edge.
     await drag(edge - 40, true);
-    assert.equal(await drag(edge - 4, true), Math.round(edge - 4));
+    const free = await drag(edge - 4, true);
+    assert.ok(Math.abs(free - (edge - 4)) <= 1.5, `expected about ${edge - 4}, got ${free}`);
+    assert.notEqual(free, Math.round(edge));
   });
 
   await check('device widths scale the canvas; interact mode follows links to other pages', async () => {
