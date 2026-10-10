@@ -1,5 +1,7 @@
 # Builds, tests and packages Wovenpage on Windows.
 # The installer and the end-to-end screenshots are attached to the run as artifacts.
+# Every stage runs even if an earlier one fails, and failures are reported as
+# annotations, so one run shows everything that is wrong.
 name: Windows
 
 on:
@@ -10,7 +12,10 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -25,17 +30,25 @@ jobs:
         run: npm run typecheck
 
       - name: Unit, service and transport tests
-        run: npm test
+        if: ${{ !cancelled() }}
+        run: |
+          node --import tsx --test \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=tap --test-reporter-destination=test.tap \
+            tests/*.test.ts || { node scripts/annotate-failures.mjs test.tap; exit 1; }
 
       - name: Build
+        if: ${{ !cancelled() }}
         run: npm run build
 
       - name: End-to-end test (drives the real app)
+        if: ${{ !cancelled() }}
         run: npm run e2e
         env:
           SHOTS: e2e-screenshots
 
       - name: Build the installer
+        if: ${{ !cancelled() }}
         run: npm run dist
 
       - uses: actions/upload-artifact@v4
@@ -46,6 +59,8 @@ jobs:
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
         with:
           name: Wovenpage-Setup
           path: release/*.exe
+          if-no-files-found: warn

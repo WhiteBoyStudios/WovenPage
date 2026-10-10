@@ -69,6 +69,8 @@ const check = async (name, fn) => {
     console.log(`ok    ${name}`);
   } catch (err) {
     console.log(`FAIL  ${name}\n      ${String(err.message).split('\n').join('\n      ')}`);
+    // On GitHub Actions, surface the failure on the run's summary page as well.
+    if (process.env.GITHUB_ACTIONS) console.log(`::error title=${`e2e: ${name}`.replace(/%/g, '%25').slice(0, 200)}::${String(err.message).slice(0, 2500).replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A')}`);
     errors.push(`${name}: ${err.message}`);
     await shot(`FAIL-${name.replace(/\W+/g, '-')}`);
   }
