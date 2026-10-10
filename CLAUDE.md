@@ -60,6 +60,7 @@ The invariant that everything rests on: **element ids are only valid for the exa
 - `sass` and `ssh2-sftp-client` are external to the main bundle and must stay in `dependencies`; `acorn` and `basic-ftp` are bundled and are dev dependencies.
 - The NSIS installer cannot be built off Windows without wine. The portable zip can, with `signAndEditExecutable=false` (so the exe keeps Electron's icon).
 - In the end-to-end test, wait for a toast by its text; earlier toasts linger.
+- Validation is debounced (350 ms, then 150 ms for the count), so the end-to-end test never reads the status bar's error count at an instant: use `expectNoErrors`, which waits for it to settle and names the problem if it stays. A step that plants an error must confirm it removed it (the broken-link step undoes until the tab is no longer unsaved); a leftover link once failed the Sass check eleven steps later with only `1 !== 0` to go on.
 - Hosted Windows runners start at 1024 x 768. The starter site then renders its phone layout and the end-to-end test fails in confusing ways, so the workflow sets 1920 x 1080 first and the test checks the window size up front.
 - Job logs and artifacts cannot be downloaded from this environment (blob storage is blocked). Read CI failures through annotations: `gh api repos/OWNER/REPO/check-runs/JOB_ID/annotations`. Tests, the end-to-end script and the installer step all emit `::error` annotations for that reason.
 - electron-builder publishes a release when it detects CI unless told `--publish never`.

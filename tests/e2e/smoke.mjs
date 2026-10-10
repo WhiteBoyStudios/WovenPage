@@ -68,6 +68,29 @@ const dragTo = async (from, to, y = 0.5, opts = {}) => {
   await win.waitForTimeout(150);
   await win.mouse.up();
 };
+// Validation is debounced, so the status bar is checked once it has had time
+// to settle. A problem that shows and then clears is reported as a note; one
+// that stays fails the check and is named in the message. `expectBrief` is for
+// the moment after a deliberate error is removed, when a short delay is by design.
+const expectNoErrors = async (what, { expectBrief = false } = {}) => {
+  const shown = () => win.evaluate(() => (document.querySelector('.status__item.is-error')
+    ? [...document.querySelectorAll('.problems__row.is-error')].map((row) => row.textContent.trim())
+    : null));
+  const started = Date.now();
+  let first = null;
+  let now = await shown();
+  while (now && Date.now() - started < 6000) {
+    first ??= now;
+    await win.waitForTimeout(200);
+    now = await shown();
+  }
+  if (now) assert.fail(`${what}; the status bar still shows ${now.length} error(s) after 6 s:\n- ${now.join('\n- ')}`);
+  if (first && !expectBrief) {
+    const note = `an error was shown for about ${Date.now() - started} ms and then cleared: ${first.join(' | ')}`;
+    console.log(`note  ${note}`);
+    if (process.env.GITHUB_ACTIONS) console.log(`::notice title=e2e%3A a problem appeared briefly::${note.replace(/%/g, '%25').replace(/\r?\n/g, ' ')}`);
+  }
+};
 const check = async (name, fn) => {
   try {
     await fn();
@@ -275,9 +298,17 @@ try {
     await win.waitForFunction(() => /error/.test(document.querySelector('.status__item.is-error')?.textContent ?? ''), null, { timeout: 8000 });
     await win.keyboard.press('Control+Shift+M');
     assert.match(await win.locator('.problems__list').innerText(), /nowhere\.html/);
-    await win.keyboard.press('Control+Z');
-    await win.keyboard.press('Control+Z');
     await win.keyboard.press('Control+Shift+M');
+    // Undo until the file is back to its saved text, however the typing was grouped
+    // into undo steps, and confirm it: a leftover link would surface in a later check.
+    const unsaved = () => win.locator('.tab', { hasText: 'index.html' }).evaluate((tab) => tab.classList.contains('is-dirty'));
+    await win.locator('.monaco-editor textarea, .monaco-editor .native-edit-context').first().focus();
+    for (let i = 0; i < 6 && (await unsaved()); i++) {
+      await win.keyboard.press('Control+Z');
+      await win.waitForTimeout(150);
+    }
+    assert.ok(!(await unsaved()), 'undo returns index.html to its saved text');
+    await expectNoErrors('the broken link must be gone once it is undone', { expectBrief: true });
   });
 
   await check('build writes plain HTML with no composition tags', async () => {
@@ -460,7 +491,7 @@ try {
     await win.locator('.toast--success', { hasText: /Built 4 pages/ }).waitFor({ timeout: 10000 });
     assert.equal(readFileSync(join(site, '_site/css/theme.css'), 'utf8'), '.hero h1 {\n  letter-spacing: 5px;\n}\n');
     assert.ok(!existsSync(join(site, '_site/css/theme.scss')) && !existsSync(join(site, '_site/css/_vars.scss')));
-    assert.equal(await win.locator('.status__item.is-error').count(), 0, 'the link to the compiled stylesheet is not reported as broken');
+    await expectNoErrors('the link to the compiled stylesheet must not be reported as broken');
   });
   await shot('sass');
 
